@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL") // Uncomment if you use Supabase Transaction Pooler
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String
+  phoneNumber  String        @unique
+  passwordHash String
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model Transaction {
+  id              String            @id @default(uuid())
+  senderUserId    String
+  sender          User              @relation(fields: [senderUserId], references: [id])
+  recipientPhone  String
+  amount          Decimal           @db.Decimal(10, 2)
+  currency        String            @default("GBP")
+  status          TransactionStatus @default(PENDING_PAYMENT)
+  paymentProvider String?
+  payoutProvider  String?
+  externalId      String?
+  payoutId        String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("transactions")
+}
+
+model SandboxWallet {
+  id          String   @id @default(uuid())
+  phoneNumber String   @unique
+  balance     Decimal  @default(0.00) @db.Decimal(10, 2)
+  currency    String   @default("KES")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("sandbox_wallets")
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("admin_users")
+}
+
+enum TransactionStatus {
+  PENDING_PAYMENT
+  PAYMENT_CONFIRMED
+  PAYOUT_IN_PROGRESS
+  PAYOUT_SUCCESS
+  PAYOUT_FAILED
+  REFUNDED
+}
+
+enum AdminRole {
+  ADMIN
+  SUPPORT
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  action      AuditAction
+  adminUserId String?
+  adminEmail  String?
+  targetType  String? // e.g., "Transaction", "User"
+  targetId    String?
+  details     String? // JSON string for additional context
+  ipAddress   String?
+  createdAt   DateTime    @default(now())
+
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  ADMIN_LOGIN
+  ADMIN_LOGOUT
+  TRANSACTION_RETRY
+  TRANSACTION_REFUND
+  USER_MODIFIED
+  SYSTEM_EVENT
+}
