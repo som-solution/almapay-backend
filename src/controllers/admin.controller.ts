@@ -19,19 +19,22 @@ export const getAllTransactions = async (req: Request, res: Response, next: Next
 export const retryPayout = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        await transactionService.retryPayout(id as string);
-
-        // Log admin action
         const ipAddress = Array.isArray(req.ip) ? req.ip[0] : req.ip;
+        const adminId = req.user!.userId;
+
+        // Pass adminId and ipAddress for audit logging
+        await transactionService.retryPayout(id as string, adminId, ipAddress);
+
+        // Additional audit log for admin action
         await auditService.logAction({
             action: 'TRANSACTION_RETRY',
-            adminUserId: req.user!.userId,
+            adminUserId: adminId,
             targetType: 'Transaction',
             targetId: id as string,
             ipAddress: ipAddress
         });
 
-        res.json({ status: 'success', message: 'Retry initiated' });
+        res.json({ status: 'success', message: 'Payout retry initiated' });
     } catch (error) {
         next(error);
     }
@@ -49,13 +52,16 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 export const refundTransaction = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const transaction = await transactionService.refundTransaction(id as string);
-
-        // Log admin action
         const ipAddress = Array.isArray(req.ip) ? req.ip[0] : req.ip;
+        const adminId = req.user!.userId;
+
+        // Pass adminId and ipAddress for audit logging
+        const transaction = await transactionService.refundTransaction(id as string, adminId, ipAddress);
+
+        // Additional audit log for admin action
         await auditService.logAction({
             action: 'TRANSACTION_REFUND',
-            adminUserId: req.user!.userId,
+            adminUserId: adminId,
             targetType: 'Transaction',
             targetId: id as string,
             details: { amount: transaction.amount.toString(), currency: transaction.currency },
@@ -84,6 +90,15 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
         }));
 
         res.json({ status: 'success', data: formattedLogs });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getProviderCapabilities = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { PROVIDER_CAPABILITIES } = require('../providers/providerCapabilities');
+        res.json({ status: 'success', data: PROVIDER_CAPABILITIES });
     } catch (error) {
         next(error);
     }

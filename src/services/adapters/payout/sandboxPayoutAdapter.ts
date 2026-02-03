@@ -1,54 +1,30 @@
 import { PayoutAdapter, PayoutResult } from './payoutAdapter.interface';
 import { PrismaClient } from '@prisma/client';
 import { generateId } from '../../../utils/idGenerator';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
 export class SandboxPayoutAdapter implements PayoutAdapter {
-    async sendMoney(phoneNumber: string, amount: number, currency: string): Promise<PayoutResult> {
-        console.log(`[SandboxPayout] Sending ${amount} ${currency} to ${phoneNumber}`);
-
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
+    async sendMoney(phoneNumber: string, amount: number, currency: string, transactionId?: string): Promise<PayoutResult> {
+        console.log(`[SandboxPayout] Calling sandbox payout provider for ${phoneNumber}`);
 
         try {
-            // Find the sandbox wallet
-            let wallet = await prisma.sandboxWallet.findUnique({
-                where: { phoneNumber },
+            // Call sandbox provider endpoint (async - will send webhook later)
+            await axios.post('http://localhost:3000/sandbox/payout', {
+                phone: phoneNumber,
+                amount,
+                currency,
+                transactionId: transactionId || generateId()
             });
 
-            if (!wallet) {
-                // Auto-create wallet in sandbox mode for better UX
-                console.log(`[SandboxPayout] Wallet not found. Auto-creating for ${phoneNumber}`);
-                wallet = await prisma.sandboxWallet.create({
-                    data: {
-                        phoneNumber,
-                        currency: 'KES',
-                        balance: 0,
-                        isActive: true
-                    }
-                });
-            }
+            // Return immediately (202 pattern) - actual result comes via webhook
+            const payoutId = `PENDING_${generateId()}`;
+            return { success: true, payoutId };
 
-            if (!wallet.isActive) {
-                return { success: false, error: 'Recipient wallet is inactive' };
-            }
-
-            // Update balance
-            await prisma.sandboxWallet.update({
-                where: { phoneNumber },
-                data: {
-                    balance: { increment: amount },
-                },
-            });
-
-            const payoutsId = `SANDBOX_PAYOUT_${generateId()}`;
-            console.log(`[SandboxPayout] Success. ID: ${payoutsId}`);
-
-            return { success: true, payoutId: payoutsId };
-        } catch (error) {
-            console.error('[SandboxPayout] Error:', error);
-            return { success: false, error: 'Internal Sandbox Error' };
+        } catch (error: any) {
+            console.error('[SandboxPayout] Error calling sandbox provider:', error.message);
+            return { success: false, error: 'Provider communication error' };
         }
     }
 }

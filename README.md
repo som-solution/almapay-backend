@@ -1,105 +1,95 @@
-# AlmaPay Sandbox Backend
+# AlmaPay Backend - Production Ready
 
-A complete remittance sandbox system for sending money from UK to East Africa, built with Node.js, Express, TypeScript, and PostgreSQL.
+A complete remittance system for sending money from the UK to East Africa, built with Node.js, Express, TypeScript, and PostgreSQL.
 
-## Features
+## 🚀 Key Features
 
-- 🔐 **Authentication**: User login/registration with JWT tokens
-- 💸 **Transactions**: Send money with real-time status tracking
-- 🔄 **Transaction States**: Payment → Confirmation → Payout flow
-- 👨‍💼 **Admin Dashboard**: Transaction management, refunds, retries
-- 📊 **Audit Logs**: Complete tracking of admin actions
-- 🌍 **Multi-Currency**: GBP to KES/UGX/TZS/SOS exchange
-- 🔧 **Sandbox Mode**: Simulated payment and payout adapters
+- 🔐 **Hardened Security**: Helmet headers, Rate Limiting, and CORS protection.
+- 💸 **Stripe Integration**: Live-ready Stripe Payment Intent flow with Google Pay support.
+- 🔄 **State Machine**: Robust transaction lifecycle (Payment → Confirmation → Payout).
+- 👨💼 **Admin Dashboard**: Full control over transactions, users, and audit logs.
+- 🌍 **Multi-Currency**: GBP to KES/UGX/TZS/SOS with live rate fallback.
+- 📍 **KYC & Compliance**: Multi-tier UK address lookup and transaction threshold monitoring.
 
-## Tech Stack
+## 🛡️ Security Implementation
 
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL (Supabase)
-- **ORM**: Prisma
-- **Authentication**: JWT + bcrypt
-- **Validation**: Express middleware
+- **Helmet**: 15+ specialized HTTP security headers active.
+- **Rate Limiting**: 100 requests per 15 minutes per IP.
+- **Morgan**: Detailed request auditing for every connection.
+- **Strict Secrets**: No insecure fallbacks for `JWT_SECRET` or API keys.
 
-## API Endpoints
+## 🔌 API v1 Endpoints (Standardized)
+
+All operational endpoints are prefixed with `/api/v1`.
 
 ### Authentication
-- `POST /auth/login` - User login
-- `POST /auth/register` - User registration
-- `GET /auth/me` - Get current user profile
+- `POST /api/v1/auth/login` - User login
+- `POST /api/v1/auth/register` - User registration
+- `GET /api/v1/auth/me` - Get current user profile (Requires Auth)
 
 ### Transactions
-- `POST /transactions/send` - Send money
-- `GET /transactions` - Transaction history
-- `GET /transactions/balance` - Get wallet balance
+- `POST /api/v1/transactions/send` - Initiate money transfer
+- `GET /api/v1/transactions` - Transaction history
+- `GET /api/v1/transactions/recipient/lookup` - Search for recipients
 
 ### System
-- `GET /health` - Health check
-- `GET /rates` - Exchange rates
+- `GET /api/v1/health` - System health check
+- `GET /api/v1/rates` - Live exchange rates
+- `GET /api/v1/rates/calculate` - Transfer calculator (Amount, Fee, Rate)
 
-### Admin (Protected)
-- `GET /api/v1/admin/transactions` - All transactions
-- `POST /api/v1/admin/transactions/:id/retry` - Retry failed payout
-- `POST /api/v1/admin/transactions/:id/refund` - Refund transaction
-- `GET /api/v1/admin/users` - List users
-- `GET /api/v1/admin/audit-logs` - Audit logs
+### Admin (Access Controlled)
+- `GET /api/v1/admin/transactions` - Global transaction view
+- `POST /api/v1/admin/transactions/:id/retry` - Manual payout retry
+- `POST /api/v1/admin/transactions/:id/refund` - Full transaction refund
+- `GET /api/v1/admin/users` - User management list
+- `GET /api/v1/admin/audit-logs` - System audit log access
 
-## Setup
+---
 
-1. **Install dependencies**:
+## 🛠️ Setup & Development
+
+1. **Install Dependencies**:
    ```bash
    npm install
    ```
 
-2. **Configure environment variables** (`.env`):
-   ```env
-   PORT=3000
-   DATABASE_URL="postgresql://..."
-   JWT_SECRET="your-secret-key"
-   NODE_ENV="development"
-   ```
+2. **Configure Environment** (`.env`):
+   Necessary keys: `DATABASE_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`.
 
-3. **Setup database**:
+3. **Database Setup**:
    ```bash
    npx prisma db push
    npm run seed
    ```
 
-4. **Run development server**:
+4. **Run Server**:
    ```bash
    npm run dev
    ```
 
-## Deployment
+---
 
-### Render
+## 🌐 Connectivity (Testing)
 
-1. Push code to GitHub
-2. Create new Web Service on Render
-3. Connect GitHub repository
-4. Configure:
-   - **Build Command**: `npm install && npx prisma generate`
-   - **Start Command**: `npm start`
-5. Add environment variables in Render dashboard
-6. Deploy!
+- **Local (Recommended)**: `http://10.170.132.144:3000` (Fastest, use on same Wi-Fi)
+- **Public**: `https://dirty-sites-press.loca.lt` (Note: May be blocked by some UK mobile providers like Vodafone)
 
-## Database Schema
+---
 
-- **Users**: User accounts with authentication
-- **Transactions**: Payment records with status tracking
-- **SandboxWallets**: Recipient wallets for testing
-- **AdminUsers**: Admin accounts
-- **AuditLogs**: Admin action tracking
+## ☁️ Cloud Deployment (Render)
 
-## Transaction States
+The project is pre-configured for **Render.com**. Follow these steps for a live test:
 
-1. `PENDING_PAYMENT` - Initial state
-2. `PAYMENT_CONFIRMED` - Payment successful
-3. `PAYOUT_IN_PROGRESS` - Sending to recipient
-4. `PAYOUT_SUCCESS` - Complete
-5. `PAYOUT_FAILED` - Requires retry
-6. `REFUNDED` - Transaction refunded
+1.  **Push to GitHub**: Initialize a repo and push your code.
+2.  **Create Service**: On Render, select "New" -> "Web Service".
+3.  **Connect Repo**: Select your backend repository.
+4.  **Configuration**:
+    -   Render will automatically detect the `render.yaml` file.
+    -   **Important**: Fill in the environment variables in the Render Dashboard (use `production.env.example` as a guide).
+5.  **Database**: Point `DATABASE_URL` to your live Supabase or Render Postgres instance.
+6.  **Deploy**: Hit deploy and your API will be live on a `https://...` domain.
 
-## License
+---
 
+## 📄 License
 MIT

@@ -1,22 +1,28 @@
 import { PaymentAdapter, PaymentResult } from './paymentAdapter.interface';
 import { generateId } from '../../../utils/idGenerator';
+import axios from 'axios';
 
 export class FakePaymentAdapter implements PaymentAdapter {
-    async processPayment(amount: number, currency: string, source: string): Promise<PaymentResult> {
-        console.log(`[FakePayment] Processing payment of ${amount} ${currency} from ${source}`);
+    async processPayment(amount: number, currency: string, source: string, transactionId?: string): Promise<PaymentResult> {
+        console.log(`[FakePayment] Calling sandbox payment provider for ${amount} ${currency}`);
 
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        try {
+            // Call sandbox provider endpoint (async - will send webhook later)
+            await axios.post('http://localhost:3000/sandbox/payment', {
+                amount,
+                currency,
+                userId: source,
+                transactionId: transactionId || generateId()
+            });
 
-        // Simulate occasional failure (10% chance)
-        if (Math.random() < 0.1) {
-            console.log(`[FakePayment] Payment Failed due to random simulation.`);
-            return { success: false, error: 'Insufficient Funds (Simulated)' };
+            // Return immediately (202 pattern) - actual result comes via webhook
+            // This mimics real provider behavior
+            const txId = `PENDING_${generateId()}`;
+            return { success: true, transactionId: txId };
+
+        } catch (error: any) {
+            console.error('[FakePayment] Error calling sandbox provider:', error.message);
+            return { success: false, error: 'Provider communication error' };
         }
-
-        const txId = `FAKE_PAY_${generateId()}`;
-        console.log(`[FakePayment] Success. ID: ${txId}`);
-
-        return { success: true, transactionId: txId };
     }
 }

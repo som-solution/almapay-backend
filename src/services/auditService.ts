@@ -25,6 +25,35 @@ export class AuditService {
         });
     }
 
+    /**
+     * Log transaction status changes with full context
+     * CRITICAL: Every state change MUST be logged
+     */
+    async logStatusChange(params: {
+        transactionId: string;
+        fromStatus: string;
+        toStatus: string;
+        actorId?: string;
+        actorType: 'USER' | 'ADMIN' | 'SYSTEM';
+        ipAddress?: string;
+    }) {
+        const details = {
+            fromStatus: params.fromStatus,
+            toStatus: params.toStatus,
+            actorType: params.actorType,
+            timestamp: new Date().toISOString()
+        };
+
+        return this.logAction({
+            action: 'TRANSACTION_STATUS_CHANGE',
+            adminUserId: params.actorType === 'ADMIN' ? params.actorId : undefined,
+            targetType: 'Transaction',
+            targetId: params.transactionId,
+            details,
+            ipAddress: params.ipAddress
+        });
+    }
+
     async getAllLogs() {
         return await prisma.auditLog.findMany({
             orderBy: { createdAt: 'desc' },

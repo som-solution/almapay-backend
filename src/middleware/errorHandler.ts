@@ -1,32 +1,48 @@
 import { Request, Response, NextFunction } from 'express';
+import { InvalidStateTransitionError } from '../domain/transactionStateMachine';
 
 export class AppError extends Error {
-    statusCode: number;
-
-    constructor(message: string, statusCode: number) {
+    constructor(public message: string, public statusCode: number = 500) {
         super(message);
-        this.statusCode = statusCode;
-        Error.captureStackTrace(this, this.constructor);
     }
 }
 
-export const errorHandler = (
-    err: Error | AppError,
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    console.error('Error:', err);
+export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error('---------------------------------------------------');
+    console.error('SERVER ERROR AT:', new Date().toISOString());
+    console.error('URL:', req.url);
+    if (err.stack) console.error(err.stack);
+    else console.error('Error:', err);
+    console.error('---------------------------------------------------');
 
-    if (err instanceof AppError) {
-        return res.status(err.statusCode).json({
+    // Handle InvalidStateTransitionError (state machine violations)
+    if (err instanceof InvalidStateTransitionError) {
+        return res.status(400).json({
             status: 'error',
             message: err.message,
+            error: 'Invalid state transition'
         });
     }
 
-    return res.status(500).json({
+    // Handle custom AppError
+    if (err instanceof AppError) {
+        return res.status(err.statusCode).json({
+            status: 'error',
+            message: err.message
+        });
+    }
+
+    // Handle Prisma errors
+    if (err.code === 'P2002') {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Resource already exists'
+        });
+    }
+
+    // Default error
+    res.status(500).json({
         status: 'error',
-        message: 'Internal Server Error',
+        message: 'Internal server error'
     });
 };

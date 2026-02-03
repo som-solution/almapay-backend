@@ -1,0 +1,8 @@
+{
+    "ignore": [
+        "*.log",
+        "node_modules",
+        "prisma/*.sqlite",
+        "prisma/*.sqlite-journal"
+    ]
+}

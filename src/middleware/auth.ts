@@ -27,7 +27,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     try {
         const payload = jwt.verify(
             token,
-            process.env.JWT_SECRET || 'super-secret-sandbox-key-change-me'
+            process.env.JWT_SECRET!
         ) as JwtPayload;
 
         req.user = payload;
@@ -37,9 +37,35 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
     }
 };
 
+/**
+ * Require Admin or Support role
+ * 
+ * ADMIN: Full access (retry, refund)
+ * SUPPORT: Read-only access (view transactions, users, logs)
+ */
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    if (!req.user) {
+        return next(new AppError('Unauthorized', 401));
+    }
+
+    // Accept both ADMIN and SUPPORT roles
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPPORT') {
         return next(new AppError('Forbidden: Admin access required', 403));
+    }
+
+    next();
+};
+
+/**
+ * Require full ADMIN role (for destructive operations)
+ * 
+ * Use this for:
+ * - Retry payouts
+ * - Refund transactions
+ */
+export const requireFullAdmin = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user || req.user.role !== 'ADMIN') {
+        return next(new AppError('Forbidden: Full admin privileges required', 403));
     }
     next();
 };

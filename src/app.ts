@@ -1,21 +1,63 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './middleware/errorHandler';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 
 // Import routes (will act as placeholders until implemented)
 import authRoutes from './routes/auth.routes';
 import transactionRoutes from './routes/transaction.routes';
 import adminRoutes from './routes/admin.routes';
 import webhookRoutes from './routes/webhook.routes';
+import sandboxRoutes from './routes/sandbox.routes';
+import notificationRoutes from './routes/notification.routes';
+import complianceRoutes from './routes/compliance.routes';
+
+import { RateService } from './services/rateService';
 
 const app = express();
 
-app.use(cors());
+// Security Headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow images/assets to be shared
+}));
+
+// Request Logging
+app.use(morgan('combined')); // Standard Apache combined log format
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: 'error', message: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
+
+// CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*'];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// Webhooks must be mounted BEFORE the global json parser to allow raw body access (Stripe)
+app.use('/api/v1/webhooks', webhookRoutes);
+
 app.use(express.json());
 
 // Application Routes
+// Redirect root health to versioned health
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', environment: 'sandbox' });
+  res.redirect('/api/v1/health');
 });
 
 app.get('/', (req, res) => {
@@ -38,18 +80,18 @@ app.get('/', (req, res) => {
       <p>Server is running on port 3000</p>
       
       <h2>System</h2>
-      <div class="endpoint"><span class="method">GET</span> /health - Health check</div>
-      <div class="endpoint"><span class="method">GET</span> /rates - Get exchange rates</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/health - Health check</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/rates - Get exchange rates</div>
       
       <h2>Authentication</h2>
-      <div class="endpoint"><span class="method post">POST</span> /auth/login - User login</div>
-      <div class="endpoint"><span class="method post">POST</span> /auth/register - User registration</div>
-      <div class="endpoint"><span class="method">GET</span> /auth/me - Get current user profile (requires auth)</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/login - User login</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/register - User registration</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/auth/me - Get current user profile (requires auth)</div>
       
       <h2>Transactions</h2>
-      <div class="endpoint"><span class="method post">POST</span> /transactions/send - Send money (requires auth)</div>
-      <div class="endpoint"><span class="method">GET</span> /transactions - Transaction history (requires auth)</div>
-      <div class="endpoint"><span class="method">GET</span> /transactions/balance - Get wallet balance (requires auth)</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/transactions/send - Send money (requires auth)</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/transactions - Transaction history (requires auth)</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/transactions/recipient/lookup - Lookup recipient (requires auth)</div>
       
       <h2>Admin (API v1)</h2>
       <div class="endpoint"><span class="method">GET</span> /api/v1/admin/transactions - All transactions</div>
@@ -62,18 +104,53 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.use('/auth', authRoutes);
-app.use('/transactions', transactionRoutes);
-app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/webhooks', webhookRoutes);
+app.get('/api/v1', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'AlmaPay API v1 is active', documentation: '/api/v1/health' });
+});
 
-app.get('/rates', (req, res) => {
+app.get('/api/v1/health', (req, res) => {
+  res.status(200).json({ status: 'ok', environment: 'sandbox' });
+});
+
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/transactions', transactionRoutes);
+app.use('/api/v1/admin', adminRoutes);
+// webhookRoutes moved before express.json()
+app.use('/api/v1/sandbox', sandboxRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/compliance', complianceRoutes);
+
+app.get('/api/v1/rates/calculate', async (req, res) => {
+  const { amount, target = 'KES' } = req.query;
+  const netAmount = Number(amount) || 0;
+
+  const base = process.env.BASE_CURRENCY || 'GBP';
+  const rate = await RateService.getRate(base, target as string);
+  const fee = Number(process.env.TRANSACTION_FEE) || 2.0;
+  const recipientAmount = netAmount * rate;
+
+  res.json({
+    baseCurrency: base,
+    targetCurrency: target,
+    rate,
+    sendAmount: netAmount,
+    fee,
+    totalToPay: netAmount + fee,
+    recipientGets: recipientAmount
+  });
+});
+
+app.get('/api/v1/rates', async (req, res) => {
+  const gbpToKes = await RateService.getRate('GBP', 'KES');
+  const gbpToUgx = await RateService.getRate('GBP', 'UGX');
+  const gbpToTzs = await RateService.getRate('GBP', 'TZS');
+
   res.json({
     base: 'GBP',
     rates: {
-      'KES': 150.00,
-      'UGX': 4800.00,
-      'TZS': 3200.00,
+      'KES': gbpToKes,
+      'UGX': gbpToUgx,
+      'TZS': gbpToTzs,
       'SOS': 26000.00,
       'USD': 1.25
     }

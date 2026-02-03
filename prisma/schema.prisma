@@ -13,28 +13,82 @@ model User {
   email        String        @unique
   name         String
   phoneNumber  String        @unique
+  role         String        @default("USER") // "USER" | "ADMIN"
   passwordHash String
-  transactions Transaction[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
+  balance       Decimal        @db.Decimal(10, 2) @default(0.00)
+  transactions  Transaction[]
+  deviceTokens  DeviceToken[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // KYC / Compliance (UK)
+  dob          DateTime?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  postcode     String?
+  
   @@map("users")
 }
 
+model DeviceToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   // Expo Push Token
+  platform  String   // "ios" | "android"
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id])
+  @@unique([userId, token])
+  @@map("device_tokens")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  data      Json?    // e.g., { transactionId: "..." }
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  @@map("notifications")
+}
+
+
+
 model Transaction {
-  id              String            @id @default(uuid())
-  senderUserId    String
-  sender          User              @relation(fields: [senderUserId], references: [id])
-  recipientPhone  String
-  amount          Decimal           @db.Decimal(10, 2)
-  currency        String            @default("GBP")
-  status          TransactionStatus @default(PENDING_PAYMENT)
-  paymentProvider String?
-  payoutProvider  String?
-  externalId      String?
-  payoutId        String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                 String            @id @default(uuid())
+  senderUserId       String
+  recipientPhone     String
+  amount             Decimal           @db.Decimal(10, 2)
+  currency           String
+  exchangeRate       Decimal           @db.Decimal(10, 4)
+  fees               Decimal           @db.Decimal(10, 2)
+  discount           Decimal           @db.Decimal(10, 2) @default(0.00)
+  totalAmount        Decimal           @db.Decimal(10, 2)
+  status             TransactionStatus @default(CREATED)
+  failureReason      String?
+  sendingReason      String?           // Compliance: Required if > 300 GBP
+  recipientCountry   String
+  recipientCurrency  String
+  recipientAmount    Decimal           @db.Decimal(10, 2)
+  
+  // Provider tracking (for reconciliation and debugging)
+  paymentProvider    String?           // e.g., 'SANDBOX_PAYMENT', 'STRIPE'
+  paymentProviderRef String?           // Provider's payment reference ID
+  payoutProvider     String?           // e.g., 'SANDBOX_PAYOUT', 'MPESA'  
+  payoutProviderRef  String?           // Provider's payout reference ID
+  
+  // Safety
+  idempotencyKey     String?           @unique // Prevents double-charges
+  
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  sender             User              @relation(fields: [senderUserId], references: [id])
 
   @@map("transactions")
 }
@@ -63,18 +117,18 @@ model AdminUser {
   @@map("admin_users")
 }
 
-enum TransactionStatus {
-  PENDING_PAYMENT
-  PAYMENT_CONFIRMED
-  PAYOUT_IN_PROGRESS
-  PAYOUT_SUCCESS
-  PAYOUT_FAILED
-  REFUNDED
-}
+model WebhookEvent {
+  id          String    @id @default(uuid())
+  provider    String
+  eventId     String
+  eventType   String
+  payload     Json
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+  receivedAt  DateTime  @default(now())
 
-enum AdminRole {
-  ADMIN
-  SUPPORT
+  @@unique([provider, eventId])
+  @@map("webhook_events")
 }
 
 model AuditLog {
@@ -91,11 +145,30 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+enum TransactionStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PAYOUT_PENDING
+  PAYOUT_SUCCESS
+  PAYOUT_FAILED
+  REFUND_PENDING
+  REFUNDED
+  CANCELLED
+}
+
+enum AdminRole {
+  ADMIN
+  SUPPORT
+}
+
 enum AuditAction {
   ADMIN_LOGIN
   ADMIN_LOGOUT
   TRANSACTION_RETRY
   TRANSACTION_REFUND
+  TRANSACTION_STATUS_CHANGE
   USER_MODIFIED
   SYSTEM_EVENT
 }
