@@ -120,24 +120,31 @@ app.use('/api/v1/sandbox', sandboxRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/compliance', complianceRoutes);
 
-app.get('/api/v1/rates/calculate', async (req, res) => {
-  const { amount, target = 'KES' } = req.query;
-  const netAmount = Number(amount) || 0;
+app.get('/api/v1/rates/calculate', async (req, res, next) => {
+  try {
+    const { amount, target = 'KES' } = req.query;
+    const netAmount = Number(amount) || 0;
 
-  const base = process.env.BASE_CURRENCY || 'GBP';
-  const rate = await RateService.getRate(base, target as string);
-  const fee = Number(process.env.TRANSACTION_FEE) || 2.0;
-  const recipientAmount = netAmount * rate;
+    const base = process.env.BASE_CURRENCY || 'GBP';
+    const rate = await RateService.getRate(base, target as string);
+    const fee = Number(process.env.TRANSACTION_FEE) || 2.0;
+    const recipientAmount = netAmount * rate;
 
-  res.json({
-    baseCurrency: base,
-    targetCurrency: target,
-    rate,
-    sendAmount: netAmount,
-    fee,
-    totalToPay: netAmount + fee,
-    recipientGets: recipientAmount
-  });
+    res.json({
+      status: 'success',
+      data: {
+        baseCurrency: base,
+        targetCurrency: target,
+        rate,
+        sendAmount: netAmount,
+        fee,
+        totalToPay: netAmount + fee,
+        recipientGets: recipientAmount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/v1/rates', async (req, res) => {
@@ -146,13 +153,16 @@ app.get('/api/v1/rates', async (req, res) => {
   const gbpToTzs = await RateService.getRate('GBP', 'TZS');
 
   res.json({
-    base: 'GBP',
-    rates: {
-      'KES': gbpToKes,
-      'UGX': gbpToUgx,
-      'TZS': gbpToTzs,
-      'SOS': 26000.00,
-      'USD': 1.25
+    status: 'success',
+    data: {
+      base: 'GBP',
+      rates: {
+        'KES': gbpToKes,
+        'UGX': gbpToUgx,
+        'TZS': gbpToTzs,
+        'SOS': 26000.00,
+        'USD': 1.25
+      }
     }
   });
 });

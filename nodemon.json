@@ -1,6 +1,8 @@
 {
     "ignore": [
         "*.log",
+        "server.log",
+        "server_new.log",
         "node_modules",
         "prisma/*.sqlite",
         "prisma/*.sqlite-journal"
