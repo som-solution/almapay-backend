@@ -5,9 +5,13 @@ dotenv.config();
 
 const PORT = Number(process.env.PORT) || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`AlmaPay Sandbox Server running on port ${PORT}`);
-    console.log(`Server accessible on all network interfaces (0.0.0.0)`);
-    const envName = process.env.ALMAPAY_ENV === 'live' ? 'PRODUCTION (LIVE)' : 'PUBLIC SANDBOX (SIMULATION)';
-    console.log(`Environment: ${envName}`);
-});
+if (require.main === module) {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`AlmaPay Sandbox Server running on port ${PORT}`);
+        console.log(`Server accessible on all network interfaces (0.0.0.0)`);
+        const envName = process.env.ALMAPAY_ENV === 'live' ? 'PRODUCTION (LIVE)' : 'PUBLIC SANDBOX (SIMULATION)';
+        console.log(`Environment: ${envName}`);
+    });
+}
+
+export default app;
