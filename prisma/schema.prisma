@@ -3,45 +3,156 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL") // Uncomment if you use Supabase Transaction Pooler
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  name         String
-  phoneNumber  String        @unique
-  role         String        @default("USER") // "USER" | "ADMIN"
-  passwordHash String
-  balance       Decimal        @db.Decimal(10, 2) @default(0.00)
-  transactions  Transaction[]
-  deviceTokens  DeviceToken[]
-  notifications Notification[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  
-  // KYC / Compliance (UK)
-  dob          DateTime?
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  postcode     String?
-  
-  @@map("users")
+  id                 String               @id @default(uuid())
+  email              String               @unique
+  password           String
+  firstName          String
+  lastName           String
+  role               UserRole             @default(USER)
+  dateOfBirth        DateTime?
+  address            String?
+  phoneNumber        String?
+  kycTier            Int                  @default(1)
+  isVerified         Boolean              @default(false)
+  isFrozen           Boolean              @default(false)
+  freezeReason       String?
+  balance            Decimal              @default(0.00) @db.Decimal(10, 2)
+  currency           String               @default("GBP")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  auditLogs          AdminActionLog[]
+  DeviceToken        DeviceToken[]
+  ledgerEntries      LedgerEntry[]
+  Notification       Notification[]
+  PasswordResetToken PasswordResetToken[]
+  recipients         Recipient[]
+  RefreshToken       RefreshToken[]
+  transactions       Transaction[]
+
+  @@index([email])
+}
+
+model Recipient {
+  id             String        @id @default(uuid())
+  userId         String
+  firstName      String
+  lastName       String
+  email          String?
+  phoneNumber    String
+  mobileProvider String
+  country        String
+  riskLevel      RiskLevel     @default(LOW)
+  isBlocked      Boolean       @default(false)
+  firstUsedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
+  transactions   Transaction[]
+
+  @@index([userId])
+  @@index([phoneNumber])
+}
+
+model Transaction {
+  id                     String               @id @default(uuid())
+  userId                 String
+  recipientId            String
+  sendAmount             Decimal              @db.Decimal(10, 2)
+  sendCurrency           String               @default("GBP")
+  receiveAmount          Decimal              @db.Decimal(10, 2)
+  receiveCurrency        String
+  fee                    Decimal              @default(0.00) @db.Decimal(10, 2)
+  rate                   Decimal              @db.Decimal(10, 4)
+  sendingReason          String?
+  idempotencyKey         String?              @unique
+  status                 TransactionStatus    @default(CREATED)
+  paymentIntentId        String?
+  paymentAuthorizedAt    DateTime?
+  paymentCapturedAt      DateTime?
+  payoutProvider         String?
+  payoutProviderRef      String?              @unique
+  payoutLocked           Boolean              @default(false)
+  lockExpiresAt          DateTime?
+  isProvisional          Boolean              @default(true)
+  settledAt              DateTime?
+  finalizedAt            DateTime?
+  chargebackWindowEndsAt DateTime?
+  rateExpiresAt          DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  dispute                Dispute?
+  ledgerEntries          LedgerEntry[]
+  recipient              Recipient            @relation(fields: [recipientId], references: [id])
+  user                   User                 @relation(fields: [userId], references: [id])
+  snapshot               TransactionSnapshot?
+  webhooks               WebhookEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentIntentId])
+  @@index([recipientId])
+}
+
+model LedgerEntry {
+  id            String      @id @default(uuid())
+  transactionId String
+  userId        String
+  type          LedgerType
+  amount        Decimal     @db.Decimal(10, 2)
+  currency      String      @default("GBP")
+  balanceAfter  Decimal     @db.Decimal(10, 2)
+  sequence      BigInt
+  sourceRef     String?
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@unique([transactionId, type])
+  @@index([userId, sequence])
+}
+
+model TransactionSnapshot {
+  id            String      @id @default(uuid())
+  transactionId String      @unique
+  amount        Decimal     @db.Decimal(10, 2)
+  fee           Decimal     @db.Decimal(10, 2)
+  rate          Decimal     @db.Decimal(10, 4)
+  rateValues    Json
+  payoutParams  Json
+  createdAt     DateTime    @default(now())
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+}
+
+model AdminActionLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  actionType String
+  targetType String
+  targetId   String
+  reason     String?
+  ipAddress  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  admin      User     @relation(fields: [adminId], references: [id])
+
+  @@index([targetId])
+  @@index([adminId])
 }
 
 model DeviceToken {
   id        String   @id @default(uuid())
   userId    String
-  token     String   // Expo Push Token
-  platform  String   // "ios" | "android"
+  token     String
+  platform  String
   updatedAt DateTime @updatedAt
-  
   user      User     @relation(fields: [userId], references: [id])
+
   @@unique([userId, token])
-  @@map("device_tokens")
 }
 
 model Notification {
@@ -49,48 +160,29 @@ model Notification {
   userId    String
   title     String
   body      String
-  data      Json?    // e.g., { transactionId: "..." }
+  data      Json?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id])
-  @@map("notifications")
 }
 
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-
-model Transaction {
-  id                 String            @id @default(uuid())
-  senderUserId       String
-  recipientPhone     String
-  amount             Decimal           @db.Decimal(10, 2)
-  currency           String
-  exchangeRate       Decimal           @db.Decimal(10, 4)
-  fees               Decimal           @db.Decimal(10, 2)
-  discount           Decimal           @db.Decimal(10, 2) @default(0.00)
-  totalAmount        Decimal           @db.Decimal(10, 2)
-  status             TransactionStatus @default(CREATED)
-  failureReason      String?
-  sendingReason      String?           // Compliance: Required if > 300 GBP
-  recipientCountry   String
-  recipientCurrency  String
-  recipientAmount    Decimal           @db.Decimal(10, 2)
-  
-  // Provider tracking (for reconciliation and debugging)
-  paymentProvider    String?           // e.g., 'SANDBOX_PAYMENT', 'STRIPE'
-  paymentProviderRef String?           // Provider's payment reference ID
-  payoutProvider     String?           // e.g., 'SANDBOX_PAYOUT', 'MPESA'  
-  payoutProviderRef  String?           // Provider's payout reference ID
-  
-  // Safety
-  idempotencyKey     String?           @unique // Prevents double-charges
-  
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-
-  sender             User              @relation(fields: [senderUserId], references: [id])
-
-  @@map("transactions")
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SandboxWallet {
@@ -101,74 +193,129 @@ model SandboxWallet {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  @@map("sandbox_wallets")
 }
 
-model AdminUser {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  name         String
-  passwordHash String
-  role         AdminRole @default(ADMIN)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+model OutboxEvent {
+  id             String      @id @default(uuid())
+  aggregateId    String
+  type           String
+  payload        Json
+  status         EventStatus @default(PENDING)
+  retryCount     Int         @default(0)
+  idempotencyKey String      @unique
+  createdAt      DateTime    @default(now())
+  processedAt    DateTime?
 
-  @@map("admin_users")
+  @@index([status, createdAt])
+}
+
+model ProviderStatus {
+  name          String    @id
+  isEnabled     Boolean   @default(true)
+  failureCount  Int       @default(0)
+  lastFailureAt DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+model ReconciliationRun {
+  id            String   @id @default(uuid())
+  provider      String
+  currency      String
+  windowStart   DateTime
+  windowEnd     DateTime
+  providerTotal Decimal  @db.Decimal(15, 2)
+  ledgerTotal   Decimal  @db.Decimal(15, 2)
+  delta         Decimal  @db.Decimal(15, 2)
+  totalRecords  Int      @default(0)
+  discrepancies Int      @default(0)
+  details       Json?
+  adminId       String?
+  status        String
+  createdAt     DateTime @default(now())
+}
+
+model Dispute {
+  id                String        @id @default(uuid())
+  transactionId     String        @unique
+  providerDisputeId String
+  reason            String?
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String
+  status            DisputeStatus @default(RECEIVED)
+  deadlineAt        DateTime?
+  resolvedAt        DateTime?
+  outcome           String?
+  adminId           String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  transaction       Transaction   @relation(fields: [transactionId], references: [id])
 }
 
 model WebhookEvent {
-  id          String    @id @default(uuid())
-  provider    String
-  eventId     String
-  eventType   String
-  payload     Json
-  processed   Boolean   @default(false)
-  processedAt DateTime?
-  receivedAt  DateTime  @default(now())
+  id            String       @id @default(uuid())
+  provider      String
+  eventId       String
+  eventType     String
+  payload       Json
+  processed     Boolean      @default(false)
+  transactionId String?
+  status        EventStatus  @default(PENDING)
+  retryCount    Int          @default(0)
+  nextRetryAt   DateTime?
+  createdAt     DateTime     @default(now())
+  processedAt   DateTime?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
 
   @@unique([provider, eventId])
-  @@map("webhook_events")
+  @@index([provider, eventType])
 }
 
-model AuditLog {
-  id          String      @id @default(uuid())
-  action      AuditAction
-  adminUserId String?
-  adminEmail  String?
-  targetType  String? // e.g., "Transaction", "User"
-  targetId    String?
-  details     String? // JSON string for additional context
-  ipAddress   String?
-  createdAt   DateTime    @default(now())
-
-  @@map("audit_logs")
+enum UserRole {
+  USER
+  ADMIN
+  SUPPORT
+  OPS
+  SUPER_ADMIN
 }
 
 enum TransactionStatus {
   CREATED
-  PAYMENT_PENDING
-  PAYMENT_SUCCESS
+  PENDING_PAYMENT
+  PAYMENT_RECEIVED
   PAYMENT_FAILED
-  PAYOUT_PENDING
+  PAYOUT_INITIATED
+  PAYOUT_PROCESSING
   PAYOUT_SUCCESS
   PAYOUT_FAILED
-  REFUND_PENDING
+  PAYOUT_COMPENSATION_REQUIRED
   REFUNDED
   CANCELLED
+  AUTHORIZATION_EXPIRED
 }
 
-enum AdminRole {
-  ADMIN
-  SUPPORT
+enum LedgerType {
+  DEBIT
+  CREDIT_PAYOUT
+  CREDIT_REFUND
+  CHARGEBACK
 }
 
-enum AuditAction {
-  ADMIN_LOGIN
-  ADMIN_LOGOUT
-  TRANSACTION_RETRY
-  TRANSACTION_REFUND
-  TRANSACTION_STATUS_CHANGE
-  USER_MODIFIED
-  SYSTEM_EVENT
+enum DisputeStatus {
+  RECEIVED
+  OPEN
+  WON
+  LOST
+}
+
+enum EventStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
 }

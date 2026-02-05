@@ -1,30 +1,30 @@
-import { PayoutAdapter, PayoutResult } from './payoutAdapter.interface';
-import { PrismaClient } from '@prisma/client';
-import { generateId } from '../../../utils/idGenerator';
+
 import axios from 'axios';
+import { PayoutProvider, PayoutRequest, PayoutResult } from './payoutAdapter.interface';
 
-const prisma = new PrismaClient();
+export class SandboxPayoutAdapter implements PayoutProvider {
+    readonly name = 'SANDBOX_PAYOUT';
 
-export class SandboxPayoutAdapter implements PayoutAdapter {
-    async sendMoney(phoneNumber: string, amount: number, currency: string, transactionId?: string): Promise<PayoutResult> {
-        console.log(`[SandboxPayout] Calling sandbox payout provider for ${phoneNumber}`);
-
+    async payout(input: PayoutRequest): Promise<PayoutResult> {
         try {
-            // Call sandbox provider endpoint (async - will send webhook later)
-            await axios.post('http://localhost:3000/sandbox/payout', {
-                phone: phoneNumber,
-                amount,
-                currency,
-                transactionId: transactionId || generateId()
+            // Call sandbox endpoint (async processing + webhook)
+            await axios.post('http://127.0.0.1:3000/api/v1/sandbox/payout', {
+                transactionId: input.transactionId,
+                phone: input.recipientPhone,
+                amount: input.amount,
+                currency: input.currency
             });
 
-            // Return immediately (202 pattern) - actual result comes via webhook
-            const payoutId = `PENDING_${generateId()}`;
-            return { success: true, payoutId };
-
+            return {
+                success: true,
+                providerRef: `sandbox_out_${Date.now()}`
+            };
         } catch (error: any) {
             console.error('[SandboxPayout] Error calling sandbox provider:', error.message);
-            return { success: false, error: 'Provider communication error' };
+            return {
+                success: false,
+                error: 'Provider communication error'
+            };
         }
     }
 }

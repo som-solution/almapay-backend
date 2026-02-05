@@ -131,7 +131,7 @@ router.post('/sandbox', express.json(), async (req: Request, res: Response) => {
         const { transactionId } = data;
 
         // Import here to avoid circular dependencies
-        const { TransactionService } = await import('../services/transactionService');
+        const { TransactionService } = await import('../services/TransactionService');
         const transactionService = new TransactionService();
 
         switch (type) {
@@ -199,8 +199,8 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
         // 1. VERIFY SIGNATURE
         // We need to use the raw body for signature verification
         // Note: verify this matches body-parser setup in app.ts
-        const { StripePaymentProvider } = await import('../providers/payment/StripePaymentProvider');
-        const stripeProvider = new StripePaymentProvider();
+        const { RealPaymentAdapter } = await import('../services/adapters/payment/realPaymentAdapter');
+        const stripeProvider = new RealPaymentAdapter();
 
         let event;
         try {
@@ -230,7 +230,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
         }
 
         // 3. PROCESS EVENT
-        const { TransactionService } = await import('../services/transactionService');
+        const { TransactionService } = await import('../services/TransactionService');
         const transactionService = new TransactionService();
 
         // Handle Payment Intent events

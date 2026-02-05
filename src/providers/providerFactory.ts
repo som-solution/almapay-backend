@@ -21,6 +21,9 @@ export function getPaymentProvider(): PaymentProvider {
             return new SandboxPaymentProvider();
 
         case 'STRIPE':
+            if (process.env.ALMAPAY_ENV !== 'live') {
+                throw new Error("Safety Guard: Real Payment Provider (STRIPE) blocked. Set ALMAPAY_ENV=live to enable real money flows.");
+            }
             return new StripePaymentProvider();
 
         default:

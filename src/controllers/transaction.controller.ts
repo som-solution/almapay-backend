@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { TransactionService } from '../services/transactionService';
+import { TransactionService } from '../services/TransactionService';
+import { RateService } from '../services/rateService';
 import { mapToUserContract } from '../utils/transactionMapper';
 import { PrismaClient } from '@prisma/client';
+import { AppError } from '../middleware/errorHandler';
 
 const transactionService = new TransactionService();
 const prisma = new PrismaClient();
@@ -61,7 +63,7 @@ export const sendMoney = async (req: Request, res: Response, next: NextFunction)
 
         // Map to user contract before returning to ensure Decimals are converted to Numbers
         const mappedTransaction = {
-            ...mapToUserContract(transaction),
+            ...mapToUserContract(transaction as any),
             clientSecret: (transaction as any).clientSecret
         };
 
@@ -116,7 +118,7 @@ export const lookupRecipient = async (req: Request, res: Response, next: NextFun
         }
 
         // 1. Try to find an existing user in our system
-        const user = await prisma.user.findUnique({
+        const user = await prisma.user.findFirst({
             where: { phoneNumber: phone as string }
         });
 
@@ -124,7 +126,7 @@ export const lookupRecipient = async (req: Request, res: Response, next: NextFun
             res.json({
                 status: 'success',
                 data: {
-                    name: user.name,
+                    name: `${user.firstName} ${user.lastName}`,
                     phone: user.phoneNumber,
                     isAvailable: true
                 }
@@ -154,6 +156,91 @@ export const lookupRecipient = async (req: Request, res: Response, next: NextFun
             message: 'Is unavailable',
             data: { isAvailable: false }
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
+// ...
+
+export const getTransactionStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!.userId;
+        const transaction = await transactionService.getTransactionById(id as string, userId);
+
+        if (!transaction) return next(new AppError('Transaction not found', 404));
+
+        res.json({
+            status: 'success',
+            data: {
+                id: transaction.id,
+                status: transaction.status,
+                displayStatus: transaction.statusDisplay,
+                isTerminal: transaction.isTerminal
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const calculateTransfer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Support both Query (GET) and Body (POST)
+        const body = req.body || {};
+        const query = req.query || {};
+
+        const amount = Number(body.amount || query.amount || 0);
+        const currency = (body.currency || query.currency || 'GBP') as string;
+        const target = (body.target || query.target || 'KES') as string;
+
+        const rate = await RateService.getRate(currency, target);
+        const fee = Number(process.env.TRANSACTION_FEE || 2.0);
+        const recipientGets = amount * rate;
+
+        res.json({
+            status: 'success',
+            data: {
+                sendAmount: amount,
+                fee,
+                rate,
+                recipientGets,
+                currency,
+                targetCurrency: target,
+                totalToPay: amount + fee
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getTransactionReceipt = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.user!.userId;
+        const transactionId = req.params.id as string;
+
+        const transaction = await transactionService.getTransactionById(transactionId, userId);
+        if (!transaction) return next(new AppError('Transaction not found', 404));
+
+        // Format for Receipt
+        const receipt = {
+            receiptId: `RCPT-${transaction.id.substring(0, 8).toUpperCase()}`,
+            date: transaction.createdAt,
+            sender: 'AlmaPay Customer',
+            recipient: transaction.recipientPhone,
+            amountSent: `${transaction.amount} ${transaction.currency}`,
+            amountReceived: `${transaction.recipientAmount} ${transaction.recipientCurrency}`,
+            exchangeRate: transaction.exchangeRate,
+            fees: `${transaction.fees} ${transaction.currency}`,
+            totalPaid: `${transaction.totalAmount} ${transaction.currency}`,
+            status: transaction.statusDisplay,
+            ref: (transaction as any).payoutProviderRef || (transaction as any).paymentProviderRef || 'N/A'
+        };
+
+        res.json({ status: 'success', data: receipt });
     } catch (error) {
         next(error);
     }

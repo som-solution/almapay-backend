@@ -48,8 +48,9 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
         return next(new AppError('Unauthorized', 401));
     }
 
-    // Accept both ADMIN and SUPPORT roles
-    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPPORT') {
+    // Accept all administrative roles
+    const adminRoles = ['ADMIN', 'SUPPORT', 'OPS', 'SUPER_ADMIN'];
+    if (!req.user.role || !adminRoles.includes(req.user.role)) {
         return next(new AppError('Forbidden: Admin access required', 403));
     }
 
@@ -64,7 +65,8 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
  * - Refund transactions
  */
 export const requireFullAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    const fullPages = ['ADMIN', 'OPS', 'SUPER_ADMIN'];
+    if (!req.user || !req.user.role || !fullPages.includes(req.user.role)) {
         return next(new AppError('Forbidden: Full admin privileges required', 403));
     }
     next();

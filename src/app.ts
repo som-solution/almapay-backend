@@ -13,6 +13,8 @@ import webhookRoutes from './routes/webhook.routes';
 import sandboxRoutes from './routes/sandbox.routes';
 import notificationRoutes from './routes/notification.routes';
 import complianceRoutes from './routes/compliance.routes';
+import recipientRoutes from './routes/recipient.routes';
+import supportRoutes from './routes/support.routes';
 
 import { RateService } from './services/rateService';
 
@@ -29,7 +31,7 @@ app.use(morgan('combined')); // Standard Apache combined log format
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: 500, // Increased from 100 to 500 for development/polling
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: 'error', message: 'Too many requests, please try again later.' }
@@ -86,15 +88,43 @@ app.get('/', (req, res) => {
       <h2>Authentication</h2>
       <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/login - User login</div>
       <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/register - User registration</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/forgot-password - Request Password Reset</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/reset-password - Complete Password Reset</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/refresh-token - Refresh Access Token</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/logout - Logout</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/auth/change-password - Change Password (requires auth)</div>
       <div class="endpoint"><span class="method">GET</span> /api/v1/auth/me - Get current user profile (requires auth)</div>
       
       <h2>Transactions</h2>
       <div class="endpoint"><span class="method post">POST</span> /api/v1/transactions/send - Send money (requires auth)</div>
       <div class="endpoint"><span class="method">GET</span> /api/v1/transactions - Transaction history (requires auth)</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/transactions/calculate - Public Calculator (Query: amount, currency, target)</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/transactions/:id/status - Check Status</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/transactions/:id/receipt - Get Receipt (PDF Data)</div>
       <div class="endpoint"><span class="method">GET</span> /api/v1/transactions/recipient/lookup - Lookup recipient (requires auth)</div>
       
+      <h2>Recipients (Address Book)</h2>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/recipients - Save Recipient</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/recipients - List Recipients</div>
+      <div class="endpoint"><span class="method post">DELETE</span> /api/v1/recipients/:id - Remove Recipient</div>
+
+      <h2>Compliance & KYC</h2>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/compliance/postcode-lookup - UK Address Lookup (Query: postcode)</div>
+      <div class="endpoint"><span class="method post">PATCH</span> /api/v1/compliance/profile - Update KYC (DOB, Address)</div>
+
+      <h2>Notifications</h2>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/notifications/register - Register Push Token</div>
+      <div class="endpoint"><span class="method">GET</span> /api/v1/notifications - Get User Notifications</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/notifications/:id/read - Mark as Read</div>
+
+      <h2>Support</h2>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/support/notify - Contact Support</div>
+
       <h2>Admin (API v1)</h2>
       <div class="endpoint"><span class="method">GET</span> /api/v1/admin/transactions - All transactions</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/admin/transactions/:id/cancel - Cancel Transaction</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/admin/users/:id/disable - Disable User</div>
+      <div class="endpoint"><span class="method post">POST</span> /api/v1/admin/users/:id/enable - Enable User</div>
       <div class="endpoint"><span class="method post">POST</span> /api/v1/admin/transactions/:id/retry - Retry failed payout</div>
       <div class="endpoint"><span class="method post">POST</span> /api/v1/admin/transactions/:id/refund - Refund a transaction</div>
       <div class="endpoint"><span class="method">GET</span> /api/v1/admin/users - List all users</div>
@@ -119,6 +149,8 @@ app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/sandbox', sandboxRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/compliance', complianceRoutes);
+app.use('/api/v1/recipients', recipientRoutes);
+app.use('/api/v1/support', supportRoutes);
 
 app.get('/api/v1/rates/calculate', async (req, res, next) => {
   try {

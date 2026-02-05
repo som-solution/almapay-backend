@@ -1,148 +1,100 @@
+
 import { TransactionStatus } from '@prisma/client';
 
-/**
- * IMMUTABLE TRANSACTION STATE MACHINE
- * 
- * This defines the only valid state transitions for money transfers.
- * Violating these rules = regulatory rejection.
- * 
- * Industry Standard: Wise / Remitly / WorldRemit
- */
+export type TransactionEvent =
+    | 'PAYMENT_AUTHORIZED'
+    | 'PAYMENT_CAPTURED'
+    | 'PAYMENT_FAILED' // Added
+    | 'PAYOUT_INITIATED'
+    | 'PAYOUT_CONFIRMED'
+    | 'PAYOUT_FAILED'
+    | 'REFUND_REQUESTED'
+    | 'CANCEL_REQUESTED'
+    | 'EXPIRE_AUTH'
+    | 'COMPENSATION_TRIGGERED';
 
-// Allowed state transitions (THE LAW)
-export const ALLOWED_TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
-    CREATED: [
-        TransactionStatus.PAYMENT_PENDING,
-        TransactionStatus.CANCELLED
-    ],
+export class TransactionStateMachine {
 
-    PAYMENT_PENDING: [
-        TransactionStatus.PAYMENT_SUCCESS,
-        TransactionStatus.PAYMENT_FAILED
-    ],
+    private static readonly transitions: Record<TransactionStatus, Partial<Record<TransactionEvent, TransactionStatus>>> = {
+        [TransactionStatus.CREATED]: {
+            'PAYMENT_AUTHORIZED': TransactionStatus.PENDING_PAYMENT,
+            'CANCEL_REQUESTED': TransactionStatus.CANCELLED,
+            'PAYMENT_FAILED': TransactionStatus.PAYMENT_FAILED
+        },
+        [TransactionStatus.PENDING_PAYMENT]: {
+            'PAYMENT_CAPTURED': TransactionStatus.PAYMENT_RECEIVED,
+            'PAYMENT_AUTHORIZED': TransactionStatus.PENDING_PAYMENT, // Idempotent
+            'CANCEL_REQUESTED': TransactionStatus.CANCELLED,
+            'EXPIRE_AUTH': TransactionStatus.AUTHORIZATION_EXPIRED,
+            'PAYMENT_FAILED': TransactionStatus.PAYMENT_FAILED
+        },
+        [TransactionStatus.PAYMENT_RECEIVED]: {
+            'PAYOUT_INITIATED': TransactionStatus.PAYOUT_INITIATED,
+            'REFUND_REQUESTED': TransactionStatus.REFUNDED
+        },
+        [TransactionStatus.PAYOUT_INITIATED]: {
+            'PAYOUT_CONFIRMED': TransactionStatus.PAYOUT_SUCCESS,
+            'PAYOUT_FAILED': TransactionStatus.PAYOUT_FAILED,
+            'COMPENSATION_TRIGGERED': TransactionStatus.PAYOUT_COMPENSATION_REQUIRED
+        },
+        [TransactionStatus.PAYOUT_PROCESSING]: {
+            'PAYOUT_CONFIRMED': TransactionStatus.PAYOUT_SUCCESS,
+            'PAYOUT_FAILED': TransactionStatus.PAYOUT_FAILED,
+            'COMPENSATION_TRIGGERED': TransactionStatus.PAYOUT_COMPENSATION_REQUIRED
+        },
+        [TransactionStatus.PAYOUT_FAILED]: {
+            'REFUND_REQUESTED': TransactionStatus.REFUNDED,
+            'PAYOUT_INITIATED': TransactionStatus.PAYOUT_INITIATED,
+            'COMPENSATION_TRIGGERED': TransactionStatus.PAYOUT_COMPENSATION_REQUIRED
+        },
+        // Final States (Dead Ends)
+        [TransactionStatus.PAYOUT_SUCCESS]: {},
+        [TransactionStatus.REFUNDED]: {},
+        [TransactionStatus.CANCELLED]: {},
+        [TransactionStatus.AUTHORIZATION_EXPIRED]: {},
+        [TransactionStatus.PAYMENT_FAILED]: {},
+        [TransactionStatus.PAYOUT_COMPENSATION_REQUIRED]: {}
+    };
 
-    PAYMENT_SUCCESS: [
-        TransactionStatus.PAYOUT_PENDING
-    ],
+    /**
+     * Validates if a transition is allowed.
+     */
+    public static canTransition(current: TransactionStatus, event: TransactionEvent): boolean {
+        const allowed = this.transitions[current];
+        return !!allowed && !!allowed[event];
+    }
 
-    PAYMENT_FAILED: [
-        TransactionStatus.PAYMENT_PENDING, // Retry allowed
-        TransactionStatus.CANCELLED
-    ],
+    /**
+     * Returns the next state or throws error.
+     */
+    public static transition(current: TransactionStatus, event: TransactionEvent): TransactionStatus {
+        const next = this.transitions[current]?.[event];
+        if (!next) {
+            throw new Error(`Invalid State Transition: Cannot go from ${current} via ${event}`);
+        }
+        return next;
+    }
 
-    PAYOUT_PENDING: [
-        TransactionStatus.PAYOUT_SUCCESS,
-        TransactionStatus.PAYOUT_FAILED
-    ],
-
-    PAYOUT_FAILED: [
-        TransactionStatus.PAYOUT_PENDING,  // Retry allowed
-        TransactionStatus.REFUND_PENDING
-    ],
-
-    REFUND_PENDING: [
-        TransactionStatus.REFUNDED
-    ],
-
-    // TERMINAL STATES (Cannot transition out)
-    PAYOUT_SUCCESS: [],
-    REFUNDED: [],
-    CANCELLED: []
-};
-
-/**
- * CRITICAL: Validates that a state transition is allowed
- * 
- * @throws Error if transition is invalid
- */
-export function assertTransitionAllowed(
-    from: TransactionStatus,
-    to: TransactionStatus
-): void {
-    const allowed = ALLOWED_TRANSITIONS[from] || [];
-
-    if (!allowed.includes(to)) {
-        throw new InvalidStateTransitionError(
-            `Invalid transaction state transition: ${from} → ${to}. ` +
-            `Allowed transitions from ${from}: ${allowed.length > 0 ? allowed.join(', ') : 'NONE (terminal state)'}`
-        );
+    /**
+     * Checks if the state is considered Economically Final (Terminal).
+     */
+    public static isTerminal(status: TransactionStatus): boolean {
+        return ([
+            TransactionStatus.PAYOUT_SUCCESS,
+            TransactionStatus.REFUNDED,
+            TransactionStatus.CANCELLED,
+            TransactionStatus.AUTHORIZATION_EXPIRED,
+            TransactionStatus.PAYMENT_FAILED,
+            TransactionStatus.PAYOUT_FAILED,
+            // Plan says: "Final States: PAYMENT_FAILED, PAYOUT_FAILED, PAYOUT_SUCCESS, REFUNDED, CANCELLED, EXP, COMP"
+            TransactionStatus.PAYOUT_COMPENSATION_REQUIRED
+        ] as TransactionStatus[]).includes(status);
     }
 }
 
-/**
- * Check if a status is terminal (cannot be changed)
- */
-export function isTerminalState(status: TransactionStatus): boolean {
-    return ALLOWED_TRANSITIONS[status].length === 0;
-}
-
-/**
- * Check if a transaction can be retried
- */
-export function canRetry(status: TransactionStatus): boolean {
-    return status === TransactionStatus.PAYMENT_FAILED ||
-        status === TransactionStatus.PAYOUT_FAILED;
-}
-
-/**
- * Check if a transaction can be refunded
- * 
- * CRITICAL: Only failed payouts can be refunded
- * Successful payouts CANNOT be refunded (industry standard)
- */
-export function canRefund(status: TransactionStatus): boolean {
-    return status === TransactionStatus.PAYOUT_FAILED;
-}
-
-/**
- * Check if a transaction can be cancelled
- */
-export function canCancel(status: TransactionStatus): boolean {
-    return status === TransactionStatus.CREATED ||
-        status === TransactionStatus.PAYMENT_FAILED;
-}
-
-/**
- * Get all valid next states for a given status
- */
-export function getValidNextStates(status: TransactionStatus): TransactionStatus[] {
-    return ALLOWED_TRANSITIONS[status] || [];
-}
-
-/**
- * Custom error class for invalid state transitions
- */
 export class InvalidStateTransitionError extends Error {
-    public readonly statusCode = 400;
-    public readonly from?: TransactionStatus;
-    public readonly to?: TransactionStatus;
-
-    constructor(message: string, from?: TransactionStatus, to?: TransactionStatus) {
+    constructor(message: string) {
         super(message);
         this.name = 'InvalidStateTransitionError';
-        this.from = from;
-        this.to = to;
-
-        // Maintains proper stack trace for where our error was thrown (only available on V8)
-        if (Error.captureStackTrace) {
-            Error.captureStackTrace(this, InvalidStateTransitionError);
-        }
     }
 }
-
-/**
- * Visual representation of the state machine flow
- * 
- * HAPPY PATH:
- * CREATED → PAYMENT_PENDING → PAYMENT_SUCCESS → PAYOUT_PENDING → PAYOUT_SUCCESS (FINAL)
- * 
- * PAYMENT FAILURE PATH:
- * PAYMENT_PENDING → PAYMENT_FAILED → [RETRY or CANCELLED]
- * 
- * PAYOUT FAILURE PATH:
- * PAYOUT_PENDING → PAYOUT_FAILED → [RETRY or REFUND_PENDING → REFUNDED]
- * 
- * CANCELLATION PATH:
- * CREATED → CANCELLED (FINAL)
- * PAYMENT_FAILED → CANCELLED (FINAL)
- */

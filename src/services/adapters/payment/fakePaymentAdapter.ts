@@ -1,28 +1,33 @@
-import { PaymentAdapter, PaymentResult } from './paymentAdapter.interface';
-import { generateId } from '../../../utils/idGenerator';
+
 import axios from 'axios';
+import { PaymentProvider, PaymentRequest, PaymentResult } from './paymentAdapter.interface';
 
-export class FakePaymentAdapter implements PaymentAdapter {
-    async processPayment(amount: number, currency: string, source: string, transactionId?: string): Promise<PaymentResult> {
-        console.log(`[FakePayment] Calling sandbox payment provider for ${amount} ${currency}`);
+export class SandboxPaymentAdapter implements PaymentProvider {
+    readonly name = 'SANDBOX_PAYMENT';
 
+    async initiatePayment(input: PaymentRequest): Promise<PaymentResult> {
         try {
-            // Call sandbox provider endpoint (async - will send webhook later)
-            await axios.post('http://localhost:3000/sandbox/payment', {
-                amount,
-                currency,
-                userId: source,
-                transactionId: transactionId || generateId()
+            // Call sandbox endpoint (async processing + webhook)
+            // Using 127.0.0.1 to avoid localhost resolution issues in some envs
+            await axios.post('http://127.0.0.1:3000/api/v1/sandbox/payment', {
+                transactionId: input.transactionId,
+                amount: input.amount,
+                currency: input.currency,
+                userId: input.customer.name
             });
 
-            // Return immediately (202 pattern) - actual result comes via webhook
-            // This mimics real provider behavior
-            const txId = `PENDING_${generateId()}`;
-            return { success: true, transactionId: txId };
-
+            // Return provider reference (mimics real provider behavior)
+            return {
+                success: true,
+                providerReference: `sandbox_pay_${Date.now()}`,
+                clientSecret: `sandbox_secret_${Date.now()}`
+            };
         } catch (error: any) {
-            console.error('[FakePayment] Error calling sandbox provider:', error.message);
-            return { success: false, error: 'Provider communication error' };
+            console.error('[SandboxPayment] Error calling sandbox provider:', error.message);
+            return {
+                success: false,
+                error: 'Provider communication error'
+            };
         }
     }
 }

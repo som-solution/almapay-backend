@@ -1,9 +1,17 @@
+
+export interface PayoutRequest {
+    transactionId: string;
+    amount: number;
+    currency: string;
+    recipientPhone: string;
+}
+
 export interface PayoutResult {
     success: boolean;
-    payoutId?: string; // External ID from the provider
+    providerRef?: string;
     error?: string;
 }
 
-export interface PayoutAdapter {
-    sendMoney(phoneNumber: string, amount: number, currency: string): Promise<PayoutResult>;
+export interface PayoutProvider {
+    payout(request: PayoutRequest): Promise<PayoutResult>;
 }

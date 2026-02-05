@@ -11,35 +11,36 @@ async function main() {
     console.log(`🔍 Checking for AdminUser: ${email}`);
 
     try {
-        const admin = await prisma.adminUser.findUnique({
+        const user = await prisma.user.findUnique({
             where: { email }
         });
 
-        if (admin) {
-            console.log(`✅ AdminUser found: ${admin.id}`);
-            console.log(`   Name: ${admin.name}`);
+        if (user) {
+            console.log(`✅ User found: ${user.id}`);
+            console.log(`   Name: ${user.firstName}`);
 
             // Reset Password
             const hashedPassword = await bcrypt.hash(newPassword, 10);
-            await prisma.adminUser.update({
+            await prisma.user.update({
                 where: { email },
-                data: { passwordHash: hashedPassword }
+                data: { password: hashedPassword, role: 'SUPER_ADMIN' }
             });
-            console.log(`✅ Password has been reset to: ${newPassword}`);
+            console.log(`✅ Password reset and promoted to SUPER_ADMIN: ${newPassword}`);
         } else {
-            console.log(`❌ AdminUser NOT found.`);
-            console.log(`✨ Creating AdminUser now...`);
+            console.log(`❌ User NOT found.`);
+            console.log(`✨ Creating Admin User now...`);
 
             const hashedPassword = await bcrypt.hash(newPassword, 10);
-            await prisma.adminUser.create({
+            await prisma.user.create({
                 data: {
                     email,
-                    name: 'Nur Kasim',
-                    passwordHash: hashedPassword,
-                    role: 'ADMIN'
+                    firstName: 'Nur',
+                    lastName: 'Kasim',
+                    password: hashedPassword,
+                    role: 'SUPER_ADMIN'
                 }
             });
-            console.log(`✅ AdminUser created with password: ${newPassword}`);
+            console.log(`✅ User created with password: ${newPassword}`);
         }
     } catch (error) {
         console.error('Error:', error);

@@ -37,11 +37,13 @@ router.patch('/profile', authenticate, async (req, res) => {
 
     try {
         const updateData: any = {};
-        if (dob) updateData.dob = new Date(dob);
-        if (addressLine1) updateData.addressLine1 = addressLine1;
-        if (addressLine2) updateData.addressLine2 = addressLine2;
-        if (city) updateData.city = city;
-        if (postcode) updateData.postcode = postcode;
+        if (dob) updateData.dateOfBirth = new Date(dob);
+
+        // Flatten address to single string for simple schema
+        if (addressLine1 || postcode) {
+            const parts = [addressLine1, addressLine2, city, postcode].filter(Boolean);
+            updateData.address = parts.join(', ');
+        }
 
         const user = await prisma.user.update({
             where: { id: userId },
@@ -51,10 +53,9 @@ router.patch('/profile', authenticate, async (req, res) => {
         res.json({
             status: 'success', data: {
                 id: user.id,
-                dob: user.dob,
-                addressLine1: user.addressLine1,
-                postcode: user.postcode,
-                isKycComplete: ComplianceService.isKycComplete(user)
+                dob: user.dateOfBirth, // Map back
+                address: user.address, // simple string
+                isKycComplete: !!(user.dateOfBirth && user.address) // Simple check
             }
         });
     } catch (error: any) {
