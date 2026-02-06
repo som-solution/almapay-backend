@@ -16,7 +16,7 @@ import complianceRoutes from './routes/compliance.routes';
 import recipientRoutes from './routes/recipient.routes';
 import supportRoutes from './routes/support.routes';
 
-import { RateService } from './services/rateService';
+import { RateService } from './services/RateService';
 
 const app = express();
 

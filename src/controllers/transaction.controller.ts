@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { TransactionService } from '../services/TransactionService';
-import { RateService } from '../services/rateService';
+import { RateService } from '../services/RateService';
 import { mapToUserContract } from '../utils/transactionMapper';
 import { PrismaClient } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';

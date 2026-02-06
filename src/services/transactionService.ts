@@ -2,8 +2,8 @@
 import { PrismaClient, TransactionStatus } from '@prisma/client';
 import { Decimal } from 'decimal.js';
 import { AppError } from '../middleware/errorHandler';
-import { LedgerService } from './ledgerService';
-import { RateService } from './rateService';
+import { LedgerService } from './LedgerService';
+import { RateService } from './RateService';
 import { PayoutService } from './PayoutService';
 import { getPaymentProvider } from './adapters/payment/PaymentProviderFactory';
 import { mapToUserContract } from '../utils/transactionMapper';
