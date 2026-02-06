@@ -2,7 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from 'decimal.js';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class LimitService {
 

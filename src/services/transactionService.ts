@@ -10,7 +10,7 @@ import { mapToUserContract } from '../utils/transactionMapper';
 import { TransactionStateMachine } from '../domain/TransactionStateMachine';
 import { LimitService } from './LimitService';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 const ledgerService = new LedgerService();
 const payoutService = new PayoutService();
 

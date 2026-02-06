@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { TransactionService } from '../services/TransactionService';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Add new Recipient
 export const createRecipient = async (req: Request, res: Response, next: NextFunction) => {

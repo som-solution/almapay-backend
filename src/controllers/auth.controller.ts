@@ -6,7 +6,7 @@ import { AppError } from '../middleware/errorHandler';
 // import { ComplianceService } from '../services/complianceService'; // Ensure this exists or mock
 import { AuthService } from '../services/authService';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Mock ComplianceService if missing or simple implementation
 class ComplianceService {

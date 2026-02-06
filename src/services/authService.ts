@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../middleware/errorHandler';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 interface TokenResponse {
     accessToken: string;

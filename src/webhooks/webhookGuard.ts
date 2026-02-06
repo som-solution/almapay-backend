@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class DuplicateWebhookError extends Error {
     constructor(provider: string, eventId: string) {

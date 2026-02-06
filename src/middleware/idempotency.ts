@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, TransactionStatus } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 import { mapToUserContract } from '../utils/transactionMapper';
 

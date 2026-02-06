@@ -7,7 +7,7 @@ import { TransactionService } from '../services/TransactionService'; // PascalCa
 import { AppError } from '../middleware/errorHandler';
 import { UserRole } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 // const freezeService = new FreezeService();
 const auditService = new AuditService();
 const transactionService = new TransactionService();

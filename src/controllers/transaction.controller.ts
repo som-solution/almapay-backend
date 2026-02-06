@@ -6,7 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler';
 
 const transactionService = new TransactionService();
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export const getTransactionById = async (req: Request, res: Response, next: NextFunction) => {
     try {

@@ -2,7 +2,7 @@
 import { PrismaClient, LedgerType, User } from '@prisma/client';
 import { Decimal } from 'decimal.js';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export class LedgerService {
 

@@ -6,7 +6,7 @@ import { ReconciliationService } from '../services/ReconciliationService';
 import { OutboxService } from '../services/OutboxService';
 import { DisputeService } from '../services/DisputeService';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 const transactionService = new TransactionService();
 const auditService = new AuditService();
 const reconciliationService = new ReconciliationService();

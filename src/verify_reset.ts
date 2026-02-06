@@ -3,7 +3,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 const API_URL = 'http://localhost:3000/api/v1';
 
 const run = async () => {
